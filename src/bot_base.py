@@ -8,47 +8,15 @@ import random
 import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 
-from src.database import Database, SearchParams
+from src.database import Database, SearchParams, State
 from src.phrases import UserPhrases, GroupPhrases, ErrorPhrases
 from src.keyboard import Keyboard, create_keyboard
-from src.methods import get_word_states
+from src.methods import BotRuntimeError, get_word_states, check_args
 
 VK_MESSAGE_LIMIT = 4096
 QUOTE_LENGTH_LIMIT = 500
 RANDOM_SEARCH_QUOTES_AMOUNT = 5
 SEARCH_QUOTES_AMOUNT = 10
-
-
-class BotRuntimeError(Exception):
-    class ErrorCodes(Enum):
-        TYPE_ERROR = 0
-        KEYBOARD_ERROR = 1
-        COMMAND_ERROR = 2
-        PARSE_ERROR = 3
-        STATE_ERROR = 4
-        ALIAS_ERROR = 5
-        ATTACHMENT_ERROR = 6
-
-    def __init__(self, code: ErrorCodes, what: str, need_reply: bool, *, reply='', keyboard=Keyboard.EMPTY):
-        self.code = code
-        self.what = what
-        self.need_reply = need_reply
-        self.reply = reply
-        self.keyboard = keyboard
-
-
-class State(Enum):
-    ALIAS_INPUT = 0  # entering pseudonym
-    BOT_MENU = 1  # bot main menu
-    QUOTE_CREATION_BM = 2  # creating quote from bot menu
-    QUOTE_CREATION_MQ = 3  # creating quote from my quotes
-    QUOTE_SEARCH = 4  # searching quote
-    MY_QUOTES = 5  # handling user's quotes
-    ALIAS_CHANGING = 6  # changing of pseudonym
-    QUOTE_ADDING = 7  # adding quote
-    QUOTE_DELETING = 8  # deleting quote
-    SEARCH_BY_TAG = 9  # searching by tag
-    SEARCH_BY_WORD = 10  # searching by word
 
 
 class Command(Enum):
@@ -65,14 +33,6 @@ class Command(Enum):
     FAQ = 10
     RETURN = 11
     NOT_FOUND = 12
-
-
-def check_args(args: dict):
-    for variable_name, params in args.items():
-        value, variable_type = params
-        if type(value) != variable_type:
-            what = "{} expected in {}".format(variable_type.__name__, variable_name)
-            raise BotRuntimeError(BotRuntimeError.ErrorCodes.TYPE_ERROR.value, what, False)
 
 
 class BotBase:
@@ -387,7 +347,7 @@ class BotBase:
                         raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "unknown param passed", True,
                                               reply=ErrorPhrases.QUOTE_CREATION_ERROR_3.value)
                     if param[0] == 'a':
-                        if author is not '':
+                        if author != '':
                             raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "several authors passed",
                                                   True, reply=ErrorPhrases.QUOTE_CREATION_ERROR_6.value)
                         author_name = param[1:].strip()

@@ -1,18 +1,8 @@
 # ! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from enum import Enum
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
-from src.bot_base import BotRuntimeError
-
-
-class Keyboard(Enum):
-    BOT_MENU = 0            # bot main menu
-    FAQ_AND_RETURN = 1      # faq and return buttons
-    QUOTE_SEARCH = 2        # searching quote
-    MY_QUOTES = 3           # handling user's quotes
-    RETURN = 5              # only return button
-    EMPTY = 6               # empty
+from src.methods import BotRuntimeError, Keyboard
 
 
 def create_keyboard(which: Keyboard) -> VkKeyboard:
