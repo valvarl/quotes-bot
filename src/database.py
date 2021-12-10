@@ -5,7 +5,14 @@ import psycopg2
 from psycopg2 import Error
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
+from enum import Enum
 from src.bot_base import State
+
+
+class SearchParams(Enum):
+    ALL = 0
+    PRIVATE = 1
+    PUBLIC = 2
 
 
 class Database:
@@ -33,7 +40,10 @@ class Database:
     def user_exists(self, vk_id: int) -> bool:
         pass
 
-    def create_user(self, vk_id: int):
+    def alias_exists(self, alias: str) -> bool:
+        pass
+
+    def create_user(self, vk_id: int, alias: str):
         pass
 
     def set_user_state(self, vk_id: int, state: State):
@@ -69,5 +79,13 @@ class Database:
         return request_result
 
     def get_quotes_on_random(self, max_amount: int) -> list:
+        request_result = [12345, 12346]
+        return request_result
+
+    def get_quotes_by_word(self, word_states: list, search_param: SearchParams, max_amount: int) -> list:
+        request_result = [12345, 12346]
+        return request_result
+
+    def get_quotes_by_tag(self, tags: list, search_param: SearchParams, max_amount: int) -> list:
         request_result = [12345, 12346]
         return request_result

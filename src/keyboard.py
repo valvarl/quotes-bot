@@ -18,6 +18,9 @@ class Keyboard(Enum):
 def create_keyboard(which: Keyboard) -> VkKeyboard:
     keyboard = VkKeyboard(one_time=True)
 
+    if which == Keyboard.EMPTY:
+        return keyboard.get_keyboard()
+
     if which == Keyboard.BOT_MENU:
         keyboard.add_button("Создать цитату", color=VkKeyboardColor.PRIMARY)
         keyboard.add_button("Найти цитату", color=VkKeyboardColor.PRIMARY)
