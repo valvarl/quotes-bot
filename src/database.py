@@ -33,7 +33,7 @@ class Database:
     def user_exists(self, vk_id: int) -> bool:
         pass
 
-    def create_user(self, vk_id: int) -> int:
+    def create_user(self, vk_id: int):
         pass
 
     def set_user_state(self, vk_id: int, state: State):
@@ -45,4 +45,29 @@ class Database:
     def set_user_alias(self, vk_id: int, alias: str):
         pass
 
+    def create_quote(self, vk_id: int, text: str, *, tags=None, author='', attachments=None, private=False) -> int:
+        if tags is None:
+            tags = []
+        if attachments is None:
+            attachments = []
+        # return quote_id
+        return 12345
 
+    def get_quote(self, quote_id: int) -> dict:
+        request_result = {
+            'vk_id': 12345,  # vk_id of creator
+            'author': None,
+            'text': '',
+            'tags': [],
+            'attachments': '',
+            'private': False
+        }
+        return request_result
+
+    def get_user_quotes(self, vk_id: int) -> list:
+        request_result = [12345, 12346]
+        return request_result
+
+    def get_quotes_on_random(self, max_amount: int) -> list:
+        request_result = [12345, 12346]
+        return request_result
