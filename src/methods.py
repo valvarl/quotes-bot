@@ -1,6 +1,5 @@
 # ! /usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import pymorphy2
 from enum import Enum
 
@@ -62,7 +61,11 @@ def check_args(args: dict):
 
 # TODO: prepare word_states list using pymorphy2
 def get_word_states(word: str) -> list:
-    word_states = [word]
+    word_states = []
+    morph = pymorphy2.MorphAnalyzer()
+    str = morph.parse(word.strip())[0]
+    for x in str.lexeme:
+        word_states.append(x.word)
     return word_states
 
 
