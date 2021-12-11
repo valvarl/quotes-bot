@@ -206,9 +206,10 @@ class Database:
         WHERE "text" = '{text}' and "vk_id" = {vk_id};
         """.format(vk_id=vk_id, text=text, tags=tags_str, author=author, private=(1 if private else 0),
                    attachment=(attachments[0] if len(attachments) > 0 else 'NULL'))
+        self.cursor.execute(command)
         quote_id = self.cursor.fetchone()[0]
-        print(quote_id)
         self.connection.commit()
+        print(quote_id)
         return quote_id
 
     def get_quote(self, quote_id: int) -> dict:
@@ -220,16 +221,17 @@ class Database:
         ON "quotes"."user_id" = "users"."user_id"
         WHERE "quote_id"={quote_id};
         """
-        quote_id = self.cursor.execute(command)
-        print(quote_id)
+        self.cursor.execute(command)
+        quote = self.cursor.fetchone()
+
+        print(quote)
 
         request_result = {
-            'vk_id': 12345,  # vk_id of creator
-            'author': None,
-            'text': '',
-            'tags': [],
-            'attachments': '',
-            'private': False
+            'vk_id': quote[0],  # vk_id of creator
+            'author': quote[1],
+            'text': quote[2],
+            'attachments': [quote[3]] if quote[3] is not None else [],
+            'private': quote[4]
         }
         return request_result
 
@@ -241,13 +243,22 @@ class Database:
         WHERE "vk_id" = {vk_id};
         """
         quote_ids = self.cursor.fetchall()
-        print()
+        print(quote_ids)
         request_result = [12345, 12346]
         return request_result
 
     def get_quotes_on_random(self, max_amount: int) -> list:
+        command = f"""
+        SELECT "quote_id" FROM "quotes"
+        WHERE "private" = '0'
+        ORDER BY RANDOM()
+        LIMIT {max_amount};
+        """
+        self.cursor.execute(command)
+        quote_ids = [x[0] for x in self.cursor.fetchall()]
+        print(quote_ids)
         request_result = [12345, 12346]
-        return request_result
+        return quote_ids
 
     def get_quotes_by_word(self, word_states: list, search_param: SearchParams, max_amount: int) -> list:
         request_result = [12345, 12346]
