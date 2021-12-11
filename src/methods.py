@@ -66,7 +66,7 @@ def get_word_states(word: str) -> list:
     str = morph.parse(word.strip())[0]
     for x in str.lexeme:
         word_states.append(x.word)
-    return word_states
+    return list(set(word_states))
 
 
 if __name__ == '__main__':
