@@ -80,14 +80,14 @@ class Database:
             );
             """,
             """            
-            CREATE TABLE IF NOT EXISTS "quote"(
+            CREATE TABLE IF NOT EXISTS "quotes"(
                 "quote_id" INTEGER GENERATED ALWAYS AS IDENTITY,
                 "user_id" INTEGER NOT NULL, 
                 "author_id" INTEGER NOT NULL, 
                 "text" VARCHAR(500) NOT NULL,
                 "tags" INTEGER[],
                 "attachment" VARCHAR(32),
-                "public" BOOL NOT NULL,
+                "private" BOOL NOT NULL,
                 PRIMARY KEY ("quote_id"),
                 FOREIGN KEY ("user_id")  REFERENCES "users" ("user_id"),
                 FOREIGN KEY ("author_id")  REFERENCES "authors" ("author_id")
@@ -165,7 +165,7 @@ class Database:
 
         tags_str = ', '.join(["('{}')".format(x) for x in tags])
 
-        command = f"""
+        command = """
         DO $$
             DECLARE q_id quotes.quote_id%TYPE;
             DECLARE a_id authors.author_id%TYPE;
@@ -180,7 +180,7 @@ class Database:
             VALUES ('{author}') ON CONFLICT(title) DO UPDATE SET title=EXCLUDED.title
             RETURNING author_id INTO a_id;
         
-            INSERT INTO quotes (user_id, author_id, "text", tags, attachment, "public")
+            INSERT INTO quotes (user_id, author_id, "text", tags, attachment, "private")
             VALUES ((SELECT user_id FROM users WHERE vk_id = {vk_id}), a_id, '{text}', tags_arr, '{attachment}', '{private}')
             RETURNING quote_id INTO q_id;
         
@@ -197,8 +197,12 @@ class Database:
             UPDATE tags 
             SET quotes = array_append(quotes, q_id) 
             WHERE tags.tag_id = ANY (tags_arr::int[]);
-            SELECT "quote_id" FROM "quote" WHERE "quote_id" = q_id;
+            SELECT "quote_id" FROM "quotes" WHERE "quote_id" = q_id;
         END $$
+        SELECT MAX("quote_id") FROM "quotes"
+        INNER JOIN "users"
+        ON "quotes"."user_id" = "users"."user_id"
+        WHERE "text" = '{text}' and "vk_id" = {vk_id};
         """.format(vk_id=vk_id, text=text, tags=tags_str, author=author, private=(1 if private else 0),
                    attachment=(attachments[0] if len(attachments) > 0 else 'NULL'))
         quote_id = self.cursor.fetchone()[0]
@@ -207,6 +211,17 @@ class Database:
         return quote_id
 
     def get_quote(self, quote_id: int) -> dict:
+        command = f"""
+        SELECT "vk_id", "title", "text", "attachment", "private" FROM "quotes"
+        INNER JOIN "authors"
+        ON "quotes"."author_id" = "authors"."author_id"
+        INNER JOIN "users"
+        ON "quotes"."user_id" = "users"."user_id"
+        WHERE "quote_id"={quote_id};
+        """
+        quote_id = self.cursor.execute(command)
+        print(quote_id)
+
         request_result = {
             'vk_id': 12345,  # vk_id of creator
             'author': None,
@@ -218,6 +233,14 @@ class Database:
         return request_result
 
     def get_user_quotes(self, vk_id: int) -> list:
+        command = f"""
+        SELECT "quote_id" FROM "quotes"
+        INNER JOIN "users"
+        ON "quotes"."user_id" = "users"."user_id"
+        WHERE "vk_id" = {vk_id};
+        """
+        quote_ids = self.cursor.fetchall()
+        print()
         request_result = [12345, 12346]
         return request_result
 
@@ -232,3 +255,13 @@ class Database:
     def get_quotes_by_tag(self, tags: list, search_param: SearchParams, max_amount: int) -> list:
         request_result = [12345, 12346]
         return request_result
+
+import json
+if __name__ == '__main__':
+    with open('../access_data.json') as json_file:
+        data = json.load(json_file)
+
+    group_auth = data['group_auth']
+    database_auth = data['database_auth']
+    db = Database(database_auth)
+    print(db.get_quote(3))
