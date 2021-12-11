@@ -335,6 +335,8 @@ class BotBase:
             return self.ParseResult(True, command=Command.SEARCH_BY_WORD)
         elif message == UserPhrases.SEARCH_BY_TAG.value:
             return self.ParseResult(True, command=Command.SEARCH_BY_TAG)
+        elif message == UserPhrases.RANDOM_SEARCH.value:
+            return self.ParseResult(True, command=Command.RANDOM_SEARCH)
         elif message == UserPhrases.MY_QUOTES.value:
             return self.ParseResult(True, command=Command.MY_QUOTES)
         elif message == UserPhrases.CHANGE_ALIAS.value:

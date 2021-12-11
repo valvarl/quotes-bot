@@ -14,6 +14,7 @@ class UserPhrases(Enum):
     CHANGE_ALIAS = "изменить псевдоним"
     SEARCH_BY_WORD = "поиск по слову"
     SEARCH_BY_TAG = "поиск по тегу"
+    RANDOM_SEARCH = "случайный поиск"
     SEARCH_QUOTE = "найти цитату"
     FAQ = "справка"
     RETURN = "вернуться"
