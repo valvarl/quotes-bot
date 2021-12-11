@@ -59,7 +59,6 @@ def check_args(args: dict):
             raise BotRuntimeError(BotRuntimeError.ErrorCodes.TYPE_ERROR.value, what, False)
 
 
-# TODO: prepare word_states list using pymorphy2
 def get_word_states(word: str) -> list:
     word_states = []
     morph = pymorphy2.MorphAnalyzer()
