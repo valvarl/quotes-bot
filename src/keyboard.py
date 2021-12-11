@@ -24,7 +24,7 @@ def create_keyboard(which: Keyboard) -> VkKeyboard:
 
     elif which == Keyboard.QUOTE_SEARCH:
         keyboard.add_button("Поиск по слову", color=VkKeyboardColor.PRIMARY)
-        keyboard.add_button("Поиск по тэгу", color=VkKeyboardColor.PRIMARY)
+        keyboard.add_button("Поиск по тегу", color=VkKeyboardColor.PRIMARY)
         keyboard.add_line()
         keyboard.add_button("Случайный поиск", color=VkKeyboardColor.PRIMARY)
         keyboard.add_button("Вернуться", color=VkKeyboardColor.PRIMARY)

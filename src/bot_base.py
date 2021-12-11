@@ -9,7 +9,7 @@ import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 
 from src.database import Database, SearchParams, State
-from src.phrases import UserPhrases, GroupPhrases, ErrorPhrases
+from src.phrases import UserPhrases, GroupPhrases, ErrorPhrases, KeyboardHints
 from src.keyboard import Keyboard, create_keyboard
 from src.methods import BotRuntimeError, get_word_states, check_args
 
@@ -141,68 +141,82 @@ class BotBase:
 
                 elif parse_result.command == Command.CREATE_QUOTE:
                     print("CREATE_QUOTE")
-                    quote_id = self.db.create_quote(vk_id=vk_id, text=parse_result.text, tags=parse_result.tags,
-                                                    author=parse_result.author, attachments=event.message.attachments,
-                                                    private=parse_result.private)
-                    quote = self.get_quote(quote_id=quote_id)
-                    self.send_message(
-                        peer_id=vk_id, message="Цитата добавлена:\n\n" + quote[0], attachments=quote[1],
-                        keyboard=Keyboard.BOT_MENU if user_state == State.BOT_MENU else Keyboard.MY_QUOTES
-                    )
-                    self.db.set_user_state(vk_id=vk_id, state=user_state)
+                    self.send_message(peer_id=vk_id, message=KeyboardHints.QUOTE_CREATING.value,
+                                      keyboard=Keyboard.FAQ_AND_RETURN)
+                    if user_state == State.BOT_MENU:
+                        self.db.set_user_state(vk_id=vk_id, state=State.QUOTE_CREATION_BM)
+                    elif user_state == State.MY_QUOTES:
+                        self.db.set_user_state(vk_id=vk_id, state=State.QUOTE_CREATION_MQ)
+                    else:
+                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.UNKNOWN_COMMAND,
+                                              "unknown command \"{}\"".format(parse_result.command), False)
 
                 elif parse_result.command == Command.MY_QUOTES:
                     print("MY_QUOTES")
                     quotes = self.db.get_user_quotes(vk_id=vk_id)
-                    self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.MY_QUOTES)
+                    if quotes:
+                        self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.MY_QUOTES)
+                    else:
+                        self.send_message(peer_id=vk_id, message=KeyboardHints.MY_QUOTES_EMPTY.value,
+                                          keyboard=Keyboard.MY_QUOTES)
                     self.db.set_user_state(vk_id=vk_id, state=State.MY_QUOTES)
 
                 elif parse_result.command == Command.SEARCH_QUOTE:
                     print("SEARCH_QUOTE")
-                    self.send_message(peer_id=vk_id, keyboard=Keyboard.QUOTE_SEARCH)
+                    self.send_message(peer_id=vk_id, message=KeyboardHints.SEARCH_MENU.value,
+                                      keyboard=Keyboard.QUOTE_SEARCH)
                     self.db.set_user_state(vk_id=vk_id, state=State.QUOTE_SEARCH)
 
                 elif parse_result.command == Command.ADD_QUOTE:
                     print("ADD_QUOTE")
-                    self.send_message(peer_id=vk_id, keyboard=Keyboard.QUOTE_SEARCH)
-                    self.db.set_user_state(vk_id=vk_id, state=State.QUOTE_SEARCH)
+                    self.send_message(peer_id=vk_id, message=KeyboardHints.QUOTE_ADDING.value
+                                      , keyboard=Keyboard.FAQ_AND_RETURN)
+                    self.db.set_user_state(vk_id=vk_id, state=State.QUOTE_ADDING)
 
                 elif parse_result.command == Command.DELETE_QUOTE:
                     print("DELETE_QUOTE")
-                    self.send_message(peer_id=vk_id, keyboard=Keyboard.FAQ_AND_RETURN)
+                    self.send_message(peer_id=vk_id, message=KeyboardHints.QUOTE_DELETING.value,
+                                      keyboard=Keyboard.FAQ_AND_RETURN)
                     self.db.set_user_state(vk_id=vk_id, state=State.QUOTE_DELETING)
 
                 elif parse_result.command == Command.SEARCH_BY_TAG:
                     print("SEARCH_BY_TAG")
-                    self.send_message(peer_id=vk_id, keyboard=Keyboard.FAQ_AND_RETURN)
+                    self.send_message(peer_id=vk_id, message=KeyboardHints.SEARCH_BY_TAG.value,
+                                      keyboard=Keyboard.FAQ_AND_RETURN)
                     self.db.set_user_state(vk_id=vk_id, state=State.SEARCH_BY_TAG)
 
                 elif parse_result.command == Command.SEARCH_BY_WORD:
                     print("SEARCH_BY_WORD")
-                    self.send_message(peer_id=vk_id, keyboard=Keyboard.FAQ_AND_RETURN)
+                    self.send_message(peer_id=vk_id, message=KeyboardHints.SEARCH_BY_WORD.value,
+                                      keyboard=Keyboard.FAQ_AND_RETURN)
                     self.db.set_user_state(vk_id=vk_id, state=State.SEARCH_BY_WORD)
 
                 elif parse_result.command == Command.RANDOM_SEARCH:
                     print("RANDOM_SEARCH")
                     quotes = self.db.get_quotes_on_random(max_amount=RANDOM_SEARCH_QUOTES_AMOUNT)
-                    self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.MY_QUOTES,
+                    self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.QUOTE_SEARCH,
                                           print_quote_id=True)
 
                 elif parse_result.command == Command.CHANGE_ALIAS:
                     print("CHANGE_ALIAS")
-                    self.send_message(peer_id=vk_id, keyboard=Keyboard.RETURN)
+                    self.send_message(peer_id=vk_id, message=KeyboardHints.ALIAS_CHANGING.value,
+                                      keyboard=Keyboard.RETURN)
                     self.db.set_user_state(vk_id=vk_id, state=State.ALIAS_CHANGING)
 
                 elif parse_result.command == Command.RETURN:
                     if user_state in [State.SEARCH_BY_WORD, State.SEARCH_BY_TAG]:
                         self.db.set_user_state(vk_id=vk_id, state=State.QUOTE_SEARCH)
-                        self.send_message(peer_id=vk_id, keyboard=Keyboard.QUOTE_SEARCH)
-                    elif user_state in [State.ALIAS_CHANGING, State.QUOTE_CREATION_BM, State.MY_QUOTES]:
+                        self.send_message(peer_id=vk_id, message=KeyboardHints.SEARCH_QUOTES_RETURN.value,
+                                          keyboard=Keyboard.QUOTE_SEARCH)
+                    elif user_state in [State.ALIAS_CHANGING, State.QUOTE_CREATION_BM, State.MY_QUOTES,
+                                        State.QUOTE_SEARCH]:
                         self.db.set_user_state(vk_id=vk_id, state=State.BOT_MENU)
-                        self.send_message(peer_id=vk_id, keyboard=Keyboard.BOT_MENU)
+                        self.send_message(peer_id=vk_id, message=KeyboardHints.BOT_MENU_RETURN.value,
+                                          keyboard=Keyboard.BOT_MENU)
                     elif user_state in [State.QUOTE_CREATION_MQ, State.QUOTE_ADDING, State.QUOTE_DELETING]:
                         self.db.set_user_state(vk_id=vk_id, state=State.MY_QUOTES)
-                        self.send_message(peer_id=vk_id, keyboard=Keyboard.MY_QUOTES)
+                        self.send_message(peer_id=vk_id, message=KeyboardHints.MY_QUOTES_RETURN.value,
+                                          keyboard=Keyboard.MY_QUOTES)
                     else:
                         raise BotRuntimeError(BotRuntimeError.ErrorCodes.UNKNOWN_COMMAND,
                                               "unknown command \"{}\"".format(parse_result.command), False)
@@ -306,25 +320,28 @@ class BotBase:
 
     def parse_message(self, raw_message: str, state: State) -> ParseResult:
         message = raw_message.lower()
-        if message in [UserPhrases.START_RUS, UserPhrases.START_EN]:
+        print('msg:', message, 'state:', state)
+        if message in [UserPhrases.START_RUS.value, UserPhrases.START_EN.value]:
             return self.ParseResult(True, command=Command.BOT_START)
-        elif message == UserPhrases.CREATE_QUOTE:
+        elif message == UserPhrases.CREATE_QUOTE.value:
             return self.ParseResult(True, command=Command.CREATE_QUOTE)
-        elif message == UserPhrases.ADD_QUOTE:
+        elif message == UserPhrases.ADD_QUOTE.value:
             return self.ParseResult(True, command=Command.ADD_QUOTE)
-        elif message == UserPhrases.DELETE_QUOTE:
+        elif message == UserPhrases.DELETE_QUOTE.value:
             return self.ParseResult(True, command=Command.DELETE_QUOTE)
-        elif message == UserPhrases.SEARCH_BY_WORD:
+        elif message == UserPhrases.SEARCH_QUOTE.value:
+            return self.ParseResult(True, command=Command.SEARCH_QUOTE)
+        elif message == UserPhrases.SEARCH_BY_WORD.value:
             return self.ParseResult(True, command=Command.SEARCH_BY_WORD)
-        elif message == UserPhrases.SEARCH_BY_WORD:
+        elif message == UserPhrases.SEARCH_BY_TAG.value:
             return self.ParseResult(True, command=Command.SEARCH_BY_TAG)
-        elif message == UserPhrases.MY_QUOTES:
+        elif message == UserPhrases.MY_QUOTES.value:
             return self.ParseResult(True, command=Command.MY_QUOTES)
-        elif message == UserPhrases.CHANGE_ALIAS:
+        elif message == UserPhrases.CHANGE_ALIAS.value:
             return self.ParseResult(True, command=Command.CHANGE_ALIAS)
-        elif message == UserPhrases.FAQ:
+        elif message == UserPhrases.FAQ.value:
             return self.ParseResult(True, command=Command.FAQ)
-        elif message == UserPhrases.RETURN:
+        elif message == UserPhrases.RETURN.value:
             return self.ParseResult(True, command=Command.RETURN)
         elif state in [State.QUOTE_CREATION_BM, State.QUOTE_CREATION_MQ]:
             if message[0] == '@':

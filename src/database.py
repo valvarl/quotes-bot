@@ -53,10 +53,11 @@ class Database:
 
         commands = (
             """
-            CREATE TABLE IF NOT EXISTS "tag"(
-                "tag_id" INTEGER GENERATED ALWAYS AS IDENTITY,
-                "text" text NOT NULL,
-                PRIMARY KEY ("tag_id")
+            CREATE TABLE IF NOT EXISTS tags (
+                tag_id INTEGER GENERATED ALWAYS AS IDENTITY,
+                "text" VARCHAR(20) UNIQUE NOT NULL,
+                quotes INTEGER[],
+                PRIMARY KEY (tag_id)
             );
             """,
             """                 
@@ -64,7 +65,7 @@ class Database:
                 "user_id" INTEGER GENERATED ALWAYS AS IDENTITY,
                 "vk_id" INTEGER UNIQUE NOT NULL, 
                 "quotes" INTEGER[],
-                "tag" INTEGER[],
+                "tags" INTEGER[],
                 "alias" VARCHAR(20) UNIQUE NOT NULL,
                 "state" INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY ("user_id")
@@ -73,7 +74,7 @@ class Database:
             """                 
             CREATE TABLE IF NOT EXISTS "authors"(
                 "author_id" INTEGER GENERATED ALWAYS AS IDENTITY,
-                "title" VARCHAR UNIQUE NOT NULL,
+                "title" VARCHAR(20) UNIQUE NOT NULL,
                 "quotes" INTEGER[] ,
                 PRIMARY KEY ("author_id")
             );
@@ -83,8 +84,8 @@ class Database:
                 "quote_id" INTEGER GENERATED ALWAYS AS IDENTITY,
                 "user_id" INTEGER NOT NULL, 
                 "author_id" INTEGER NOT NULL, 
-                "text" TEXT NOT NULL,
-                "tag" INTEGER[],
+                "text" VARCHAR(500) NOT NULL,
+                "tags" INTEGER[],
                 "attachment" VARCHAR(32),
                 "public" BOOL NOT NULL,
                 PRIMARY KEY ("quote_id"),
@@ -123,9 +124,9 @@ class Database:
 
     def create_user(self, vk_id: int, alias: str):
         command = """
-        INSERT INTO "users"("vk_id", "quotes","tag","alias")
-        VALUES ({}, NULL, NULL, '{}');
-        """.format(vk_id, alias)
+        INSERT INTO "users" ("vk_id", "quotes", "tags", "alias")
+        VALUES ({vk_id}, NULL, NULL, '{alias}');
+        """.format(vk_id=vk_id, alias=alias)
         self.cursor.execute(command)
         self.connection.commit()
 
@@ -163,29 +164,48 @@ class Database:
         if attachments is None:
             attachments = []
 
+        tags_str = ', '.join(["('{}')".format(x) for x in tags])
+
         command = """
         DO $$
-            DECLARE myid quote.quote_id%TYPE;
-            DECLARE autid authors.author_id%TYPE;
+            DECLARE q_id quotes.quote_id%TYPE;
+            DECLARE a_id authors.author_id%TYPE;
+            DECLARE tags_arr INTEGER[];
         BEGIN
-            INSERT INTO  "authors"  ("title") 
-            VALUES ('{author}') ON CONFLICT("title") DO UPDATE SET title=EXCLUDED.title
-            RETURNING "author_id" INTO autid;
-           
-            INSERT INTO "quote" ("user_id",	"author_id", "text","tag","attachment","public")
-            VALUES ((SELECT "user_id" FROM "users" WHERE "vk_id" = {vk_id}), autid, '{text}', NULL, NULL, '1')
-            RETURNING "quote_id" INTO myid;
+            WITH ins AS (
+                INSERT INTO tags ("text") VALUES {tags}
+                ON CONFLICT("text") DO UPDATE SET "text"=EXCLUDED."text" RETURNING tag_id)
+            SELECT array_agg(tag_id) INTO tags_arr FROM ins;
+        
+            INSERT INTO authors ("title") 
+            VALUES ('{author}') ON CONFLICT(title) DO UPDATE SET title=EXCLUDED.title
+            RETURNING author_id INTO a_id;
+        
+            INSERT INTO quotes (user_id, author_id, "text", tags, attachment, "public")
+            VALUES ((SELECT user_id FROM users WHERE vk_id = {vk_id}), a_id, '{text}', tags_arr, '{attachment}', '{private}')
+            RETURNING quote_id INTO q_id;
+        
+            UPDATE authors
+            SET quotes = array_append(quotes, q_id)
+            WHERE author_id = a_id;
+        
+            UPDATE users
+            SET 
+                quotes = array_append(quotes, q_id),
+                tags = (SELECT array_agg(arr ORDER BY arr) from (SELECT DISTINCT unnest(tags || tags_arr) AS arr) s)
+            WHERE vk_id = {vk_id};
             
-            UPDATE "authors"
-            SET "quotes" = array_append("quotes", myid)
-            WHERE "author_id" = autid;
-            
-            UPDATE "users"
-            SET "quotes" = array_append("quotes", myid)
-            WHERE "vk_id" = {vk_id};
+            UPDATE tags 
+            SET quotes = array_append(quotes, q_id) 
+            WHERE tags.tag_id = ANY (tags_arr::int[]);
+            SELECT "quote_id" FROM "quote" WHERE "quote_id" = q_id;
         END $$
-        """
-        return 12345
+        """.format(vk_id=vk_id, text=text, tags=tags_str, author=author, private=(1 if private else 0),
+                   attachment=(attachments[0] if len(attachments) > 0 else 'NULL'))
+        quote_id = self.cursor.fetchone()[0]
+        print(quote_id)
+        self.connection.commit()
+        return quote_id
 
     def get_quote(self, quote_id: int) -> dict:
         request_result = {
