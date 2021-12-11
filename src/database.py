@@ -60,8 +60,8 @@ class Database:
             );
             """,
             """                 
-           CREATE TABLE IF NOT EXISTS "users"(
-                "user_id" INTEGER GENERATED ALWAYS AS IDENTITY(0,1),
+            CREATE TABLE IF NOT EXISTS "users"(
+                "user_id" INTEGER GENERATED ALWAYS AS IDENTITY,
                 "vk_id" INTEGER UNIQUE NOT NULL, 
                 "quotes" INTEGER[],
                 "tag" INTEGER[],
@@ -110,20 +110,20 @@ class Database:
         SELECT EXISTS (SELECT "vk_id" FROM "users" WHERE "vk_id" = {vk_id});
         """.format(vk_id=vk_id)
         self.cursor.execute(command)
-        user_exists = self.cursor.fetchone()
+        user_exists = self.cursor.fetchone()[0]
         return user_exists
 
     def alias_exists(self, alias: str) -> bool:
         command = """
-        SELECT EXISTS (SELECT "alias" FROM "users" WHERE "alias" = {alias});
+        SELECT EXISTS (SELECT "alias" FROM "users" WHERE "alias" = '{alias}');
         """.format(alias=alias)
         self.cursor.execute(command)
-        alias_exists = self.cursor.fetchone()
+        alias_exists = self.cursor.fetchone()[0]
         return alias_exists
 
     def create_user(self, vk_id: int, alias: str):
         command = """
-        INSERT INTO "users"("vk_id", "quotes","tag","alias"
+        INSERT INTO "users"("vk_id", "quotes","tag","alias")
         VALUES ({}, NULL, NULL, '{}');
         """.format(vk_id, alias)
         self.cursor.execute(command)
@@ -144,15 +144,16 @@ class Database:
         WHERE "vk_id" = {vk_id};
         """.format(vk_id=vk_id)
         self.cursor.execute(command)
-        state = self.cursor.fetchone()
+        state = self.cursor.fetchone()[0]
+        print(state)
         return State(state)
 
     def set_user_alias(self, vk_id: int, alias: str):
         command = """
-                UPDATE "users"
-                SET "alias" = '{alias}'
-                WHERE "vk_id" = {vk_id};
-                """.format(vk_id=vk_id, alias=alias)
+        UPDATE "users"
+        SET "alias" = '{alias}'
+        WHERE "vk_id" = {vk_id};
+        """.format(vk_id=vk_id, alias=alias)
         self.cursor.execute(command)
         self.connection.commit()
 
