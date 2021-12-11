@@ -30,10 +30,10 @@ def create_keyboard(which: Keyboard) -> VkKeyboard:
         keyboard.add_button("Вернуться", color=VkKeyboardColor.PRIMARY)
 
     elif which == Keyboard.MY_QUOTES:
-        keyboard.add_button("Добавить цитату", color=VkKeyboardColor.PRIMARY)
+        keyboard.add_button("Создать цитату", color=VkKeyboardColor.PRIMARY)
         keyboard.add_button("Удалить цитату", color=VkKeyboardColor.PRIMARY)
         keyboard.add_line()
-        keyboard.add_button("Сохранить цитату", color=VkKeyboardColor.PRIMARY)
+        keyboard.add_button("Добавить цитату", color=VkKeyboardColor.PRIMARY)
         keyboard.add_button("Вернуться", color=VkKeyboardColor.PRIMARY)
 
     elif which == Keyboard.RETURN:

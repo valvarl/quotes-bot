@@ -15,6 +15,8 @@ from src.methods import BotRuntimeError, get_word_states, check_args
 
 VK_MESSAGE_LIMIT = 4096
 QUOTE_LENGTH_LIMIT = 500
+AUTHOR_NAME_LENGTH_LIMIT = 20
+TAG_LENGTH_LIMIT = 20
 RANDOM_SEARCH_QUOTES_AMOUNT = 5
 SEARCH_QUOTES_AMOUNT = 10
 
@@ -134,7 +136,8 @@ class BotBase:
                 if parse_result.command == Command.BOT_START:
                     print("BOT_START")
                     if user_exists:
-                        self.send_message(peer_id=vk_id, keyboard=Keyboard.BOT_MENU)
+                        self.send_message(peer_id=vk_id, message=KeyboardHints.BOT_MENU_RETURN.value,
+                                          keyboard=Keyboard.BOT_MENU)
                         self.db.set_user_state(vk_id=vk_id, state=State.BOT_MENU)
                     else:
                         self.send_message(peer_id=vk_id, message=GroupPhrases.ALIAS_INPUT.value)
@@ -267,8 +270,8 @@ class BotBase:
                                               "invalid amount of attachments", True,
                                               reply=ErrorPhrases.QUOTE_CREATION_ERROR_12.value,
                                               keyboard=Keyboard.FAQ_AND_RETURN)
-                    if not (event.message.attachments[0].startswith('photo') or
-                            event.message.attachments[0].startswith('music')):
+                    if event.message.attachments and not (event.message.attachments[0].startswith('photo') or
+                                                          event.message.attachments[0].startswith('music')):
                         raise BotRuntimeError(BotRuntimeError.ErrorCodes.ATTACHMENT_ERROR,
                                               "invalid type of attachment", True,
                                               reply=ErrorPhrases.QUOTE_CREATION_ERROR_13.value,
@@ -377,14 +380,17 @@ class BotBase:
                             elif author_name[1:-1].count('"'):
                                 raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "several authors passed",
                                                       True, reply=ErrorPhrases.QUOTE_CREATION_ERROR_5.value)
-                            author = author_name[1:-1]
+                            author_name = author_name[1:-1]
 
                         else:
                             if author_name.count(' '):
                                 raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "quotes expected",
                                                       True, reply=ErrorPhrases.QUOTE_CREATION_ERROR_7.value)
-                            else:
-                                author = author_name
+                        if len(author_name) > AUTHOR_NAME_LENGTH_LIMIT:
+                            raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "author name length limit",
+                                                  True, reply=ErrorPhrases.QUOTE_CREATION_ERROR_15.value)
+                        author = author_name
+
                     elif param[0] == 't':
                         if tags is not None:
                             raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "several tag param passed",
@@ -399,6 +405,10 @@ class BotBase:
                                                       "several quotes args passed",
                                                       True, reply=ErrorPhrases.QUOTE_CREATION_ERROR_9.value)
                             tags = tag_args[1:-1].split()
+                            for tag in tags:
+                                if len(tag) > TAG_LENGTH_LIMIT:
+                                    raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "tag length limit",
+                                                          True, reply=ErrorPhrases.QUOTE_CREATION_ERROR_14.value)
                         else:
                             if tag_args.count(' '):
                                 raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "quotes expected",
