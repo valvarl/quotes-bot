@@ -146,6 +146,7 @@ class Database:
         """.format(vk_id=vk_id)
         self.cursor.execute(command)
         state = self.cursor.fetchone()[0]
+        print(state)
         return State(state)
 
     def set_user_alias(self, vk_id: int, alias: str):
