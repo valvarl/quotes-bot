@@ -86,7 +86,7 @@ class Database:
                 "author_id" INTEGER NOT NULL, 
                 "text" VARCHAR(500) NOT NULL,
                 "tags" INTEGER[],
-                "attachment" VARCHAR(32),
+                "attachment" VARCHAR(64),
                 "private" BOOL NOT NULL,
                 PRIMARY KEY ("quote_id"),
                 FOREIGN KEY ("user_id")  REFERENCES "users" ("user_id"),
@@ -149,6 +149,13 @@ class Database:
         print(state)
         return State(state)
 
+    def get_user_alias(self, vk_id: int) -> str:
+        command = f"""SELECT "alias" FROM "users" WHERE "vk_id" = {vk_id};"""
+        self.cursor.execute(command)
+        alias = self.cursor.fetchone()[0]
+        print(alias)
+        return alias
+
     def set_user_alias(self, vk_id: int, alias: str):
         command = """
         UPDATE "users"
@@ -166,51 +173,72 @@ class Database:
 
         tags_str = ', '.join(["('{}')".format(x) for x in tags])
 
+        create_tags_arr = """
+        WITH ins AS (
+        INSERT INTO tags ("text") VALUES {tags}
+        ON CONFLICT("text") DO UPDATE SET "text"=EXCLUDED."text" RETURNING tag_id)
+        SELECT array_agg(tag_id) INTO tags_arr FROM ins;
+        """ if tags else ''
+
+        create_attachment = f"attachment = '{attachments[0]}';" if attachments else ''
+
         command = """
         DO $$
             DECLARE q_id quotes.quote_id%TYPE;
+            DECLARE attachment quotes.attachment%TYPE;
             DECLARE a_id authors.author_id%TYPE;
             DECLARE tags_arr INTEGER[];
         BEGIN
-            WITH ins AS (
-                INSERT INTO tags ("text") VALUES {tags}
-                ON CONFLICT("text") DO UPDATE SET "text"=EXCLUDED."text" RETURNING tag_id)
-            SELECT array_agg(tag_id) INTO tags_arr FROM ins;
-        
+            {create_tags_arr}
+
+            {create_attachment}
+
             INSERT INTO authors ("title") 
             VALUES ('{author}') ON CONFLICT(title) DO UPDATE SET title=EXCLUDED.title
             RETURNING author_id INTO a_id;
-        
+
             INSERT INTO quotes (user_id, author_id, "text", tags, attachment, "private")
-            VALUES ((SELECT user_id FROM users WHERE vk_id = {vk_id}), a_id, '{text}', tags_arr, '{attachment}', '{private}')
+            VALUES ((SELECT user_id FROM users WHERE vk_id = {vk_id}), a_id, '{text}', tags_arr, attachment, '{private}')
             RETURNING quote_id INTO q_id;
-        
+
             UPDATE authors
             SET quotes = array_append(quotes, q_id)
             WHERE author_id = a_id;
-        
+
             UPDATE users
             SET 
                 quotes = array_append(quotes, q_id),
                 tags = (SELECT array_agg(arr ORDER BY arr) from (SELECT DISTINCT unnest(tags || tags_arr) AS arr) s)
             WHERE vk_id = {vk_id};
-            
+
             UPDATE tags 
             SET quotes = array_append(quotes, q_id) 
             WHERE tags.tag_id = ANY (tags_arr::int[]);
-            SELECT "quote_id" FROM "quotes" WHERE "quote_id" = q_id;
-        END $$
+        END $$;
         SELECT MAX("quote_id") FROM "quotes"
         INNER JOIN "users"
         ON "quotes"."user_id" = "users"."user_id"
         WHERE "text" = '{text}' and "vk_id" = {vk_id};
         """.format(vk_id=vk_id, text=text, tags=tags_str, author=author, private=(1 if private else 0),
-                   attachment=(attachments[0] if len(attachments) > 0 else 'NULL'))
+                   create_tags_arr=create_tags_arr, create_attachment=create_attachment)
+        print(command)
         self.cursor.execute(command)
         quote_id = self.cursor.fetchone()[0]
         self.connection.commit()
         print(quote_id)
         return quote_id
+
+    def add_quote_to_user(self, vk_id: int, quote_id: int):
+        command = """
+        UPDATE users
+        SET quotes[1]={quote_id}
+        WHERE  vk_id = {vk_id} and ((select quotes is null from users WHERE vk_id = {vk_id}) = 'true');
+        UPDATE users
+        SET quotes = array_append(quotes, {quote_id})
+        WHERE  vk_id = {vk_id} and not ("quotes" @> '{{ {quote_id} }}'::integer[]);
+        """.format(quote_id=quote_id, vk_id=vk_id)
+        self.cursor.execute(command)
+        self.connection.commit()
 
     def get_quote(self, quote_id: int) -> dict:
         command = f"""
@@ -242,10 +270,9 @@ class Database:
         ON "quotes"."user_id" = "users"."user_id"
         WHERE "vk_id" = {vk_id};
         """
-        quote_ids = self.cursor.fetchall()
-        print(quote_ids)
-        request_result = [12345, 12346]
-        return request_result
+        self.cursor.execute(command)
+        quote_ids = [x[0] for x in self.cursor.fetchall()]
+        return quote_ids
 
     def get_quotes_on_random(self, max_amount: int) -> list:
         command = f"""
@@ -256,15 +283,33 @@ class Database:
         """
         self.cursor.execute(command)
         quote_ids = [x[0] for x in self.cursor.fetchall()]
-        print(quote_ids)
-        request_result = [12345, 12346]
         return quote_ids
 
-    def get_quotes_by_word(self, word_states: list, search_param: SearchParams, max_amount: int) -> list:
-        request_result = [12345, 12346]
-        return request_result
+    def get_quotes_by_word(self, vk_id: int, word_states: list, search_param: SearchParams, max_amount: int) -> list:
+        word_states = ', '.join(['%{}%'.format(x) for x in word_states])
+        commands = (f"""
+        ---ищет чужие public quotes
+        SELECT quote_id FROM quotes 
+        WHERE quote_id <> All((SELECT quotes FROM users WHERE vk_id = 1234)::INT[]) 
+						AND "private" = '0' AND "text" LIKE ANY(ARRAY[{word_states}])
+        ORDER BY RANDOM()
+        LIMIT {max_amount};
+        """, f"""
+        --- ищет по всем своим, которые написаны vk_id и добавлены 
+        SELECT quote_id FROM quotes 
+        WHERE quote_id = ANY((SELECT quotes FROM users WHERE vk_id = {vk_id})::int[]) AND "text" LIKE ANY(ARRAY[{word_states}])
+        ORDER BY RANDOM()
+        LIMIT {max_amount};					
+        """, f"""
+        SELECT quote_id FROM quotes WHERE (quote_id = ANY((SELECT quotes FROM users WHERE vk_id = {vk_id})::INT[]) OR (
+                quote_id <> ALL((SELECT quotes FROM users WHERE vk_id = {vk_id})::INT[]) AND "private" = '0'
+                )) AND "text" LIKE ANY(ARRAY[{word_states}]);
+        """)
+        self.cursor.execute(commands[search_param.value])
+        quote_ids = [x[0] for x in self.cursor.fetchall()]
+        return quote_ids
 
-    def get_quotes_by_tag(self, tags: list, search_param: SearchParams, max_amount: int) -> list:
+    def get_quotes_by_tag(self, vk_id: int, tags: list, search_param: SearchParams, max_amount: int) -> list:
         request_result = [12345, 12346]
         return request_result
 
