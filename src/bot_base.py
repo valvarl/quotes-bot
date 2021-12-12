@@ -311,11 +311,12 @@ class BotBase:
                 elif user_state in [State.SEARCH_BY_WORD, State.SEARCH_BY_TAG]:
                     print("SEARCH_BY: WORD / TAG")
                     if user_state == State.SEARCH_BY_WORD:
-                        quotes = self.db.get_quotes_by_word(word_states=get_word_states(word=parse_result.text),
+                        quotes = self.db.get_quotes_by_word(vk_id=vk_id,
+                                                            word_states=get_word_states(word=parse_result.text),
                                                             search_param=parse_result.search_param,
                                                             max_amount=SEARCH_QUOTES_AMOUNT)
                     else:
-                        quotes = self.db.get_quotes_by_tag(tags=parse_result.tags,
+                        quotes = self.db.get_quotes_by_tag(vk_id=vk_id, tags=parse_result.tags,
                                                            search_param=parse_result.search_param,
                                                            max_amount=SEARCH_QUOTES_AMOUNT)
                     if quotes:

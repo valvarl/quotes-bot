@@ -286,7 +286,7 @@ class Database:
         return quote_ids
 
     def get_quotes_by_word(self, vk_id: int, word_states: list, search_param: SearchParams, max_amount: int) -> list:
-        word_states = ', '.join(['%{}%'.format(x) for x in word_states])
+        word_states = ', '.join(["'%{}%'".format(x) for x in word_states])
         commands = (f"""
         ---ищет чужие public quotes
         SELECT quote_id FROM quotes 
@@ -301,6 +301,7 @@ class Database:
         ORDER BY RANDOM()
         LIMIT {max_amount};					
         """, f"""
+        ---поиск по высказываниям других пользователей..не работает
         SELECT quote_id FROM quotes WHERE (quote_id = ANY((SELECT quotes FROM users WHERE vk_id = {vk_id})::INT[]) OR (
                 quote_id <> ALL((SELECT quotes FROM users WHERE vk_id = {vk_id})::INT[]) AND "private" = '0'
                 )) AND "text" LIKE ANY(ARRAY[{word_states}]);
