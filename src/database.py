@@ -287,25 +287,28 @@ class Database:
 
     def get_quotes_by_word(self, vk_id: int, word_states: list, search_param: SearchParams, max_amount: int) -> list:
         word_states = ', '.join(["'%{}%'".format(x) for x in word_states])
+        print(word_states)
         commands = (f"""
-        ---ищет чужие public quotes
-        SELECT quote_id FROM quotes 
-        WHERE quote_id <> All((SELECT quotes FROM users WHERE vk_id = 1234)::INT[]) 
-						AND "private" = '0' AND "text" LIKE ANY(ARRAY[{word_states}])
+        ---ищет среди всех и своих и чужих публичных
+        SELECT "quote_id" FROM "quotes" 
+        WHERE "quote_id" <> All((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::INT[]) 
+        AND "private" = '0' AND "text" ILIKE ANY(ARRAY[{word_states}])
         ORDER BY RANDOM()
         LIMIT {max_amount};
         """, f"""
         --- ищет по всем своим, которые написаны vk_id и добавлены 
-        SELECT quote_id FROM quotes 
-        WHERE quote_id = ANY((SELECT quotes FROM users WHERE vk_id = {vk_id})::int[]) AND "text" LIKE ANY(ARRAY[{word_states}])
+        SELECT "quote_id" FROM "quotes" 
+        WHERE "quote_id" = ANY((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::int[]) AND "text" ILIKE ANY(ARRAY[{word_states}])
         ORDER BY RANDOM()
         LIMIT {max_amount};					
         """, f"""
-        ---поиск по высказываниям других пользователей..не работает
-        SELECT quote_id FROM quotes WHERE (quote_id = ANY((SELECT quotes FROM users WHERE vk_id = {vk_id})::INT[]) OR (
-                quote_id <> ALL((SELECT quotes FROM users WHERE vk_id = {vk_id})::INT[]) AND "private" = '0'
-                )) AND "text" LIKE ANY(ARRAY[{word_states}]);
+        ---поиск по высказываниям других пользователей
+        SELECT "quote_id" FROM quotes
+        WHERE "private"='0' AND "text" ILIKE ANY(ARRAY[{word_states}])   
+        ORDER BY RANDOM()
+        LIMIT {max_amount};
         """)
+        print(commands)
         self.cursor.execute(commands[search_param.value])
         quote_ids = [x[0] for x in self.cursor.fetchall()]
         return quote_ids
