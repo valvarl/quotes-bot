@@ -239,6 +239,7 @@ class Database:
         self.cursor.execute(command)
         self.connection.commit()
 
+    # TODO: make remove_user_quote
     def remove_user_quote(self, vk_id: int, quote_id: int):
         pass
 
