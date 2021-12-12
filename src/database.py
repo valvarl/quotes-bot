@@ -190,7 +190,6 @@ class Database:
             DECLARE tags_arr INTEGER[];
         BEGIN
             {create_tags_arr}
-
             {create_attachment}
 
             INSERT INTO authors ("title") 
@@ -261,6 +260,7 @@ class Database:
             'attachments': [quote[3]] if quote[3] is not None else [],
             'private': quote[4]
         }
+        print(request_result)
         return request_result
 
     def get_user_quotes(self, vk_id: int) -> list:
