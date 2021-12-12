@@ -97,6 +97,7 @@ class BotBase:
         quote = quote_data['text'] + '\n©' + quote_data['author']
         if print_quote_id:
             quote = '<{}>\n'.format(quote_id) + quote
+        print(quote_data['attachments'])
         return quote, quote_data['attachments']
 
     def print_quote_list(self, vk_id: int, quotes: list, keyboard: Keyboard, print_quote_id=False):
@@ -113,7 +114,7 @@ class BotBase:
                 if message_rely:
                     self.send_message(peer_id=vk_id, message=message_rely, keyboard=keyboard)
                     message_rely = ''
-                self.send_message(peer_id=vk_id, message=new_quote[0], attachments=new_quote[1], keyboard=keyboard)
+                self.send_message(peer_id=vk_id, message=new_quote[0], attachment=new_quote[1][0], keyboard=keyboard)
         if message_rely:
             self.send_message(peer_id=vk_id, message=message_rely, keyboard=keyboard)
 
@@ -270,17 +271,41 @@ class BotBase:
                                               "invalid amount of attachments", True,
                                               reply=ErrorPhrases.QUOTE_CREATION_ERROR_12.value,
                                               keyboard=Keyboard.FAQ_AND_RETURN)
-                    if event.message.attachments and not (event.message.attachments[0].startswith('photo') or
-                                                          event.message.attachments[0].startswith('music')):
-                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.ATTACHMENT_ERROR,
-                                              "invalid type of attachment", True,
-                                              reply=ErrorPhrases.QUOTE_CREATION_ERROR_13.value,
-                                              keyboard=Keyboard.FAQ_AND_RETURN)
+                    print(event.message.attachments)
+                    attachment = ''
+                    if event.message.attachments:
+                        attachment = event.message.attachments[0]
+                        if attachment['type'] == 'photo':
+                            print(attachment)
+                            if 'access_key' in attachment['photo'].keys():
+                                attachment = 'photo{}_{}_{}'.format(attachment['photo']['owner_id'],
+                                                                    attachment['photo']['id'],
+                                                                    attachment['photo']['access_key'])
+                            else:
+                                attachment = 'photo{}_{}'.format(attachment['photo']['owner_id'],
+                                                                 attachment['photo']['id'])
+                        elif attachment['type'] == 'audio':
+                            if 'access_key' in attachment['audio'].keys():
+                                attachment = 'audio{}_{}_{}'.format(attachment['audio']['owner_id'],
+                                                                    attachment['audio']['id'],
+                                                                    attachment['audio']['access_key'])
+                            else:
+                                attachment = 'audio{}_{}'.format(attachment['audio']['owner_id'],
+                                                                 attachment['audio']['id'])
+                        else:
+                            raise BotRuntimeError(BotRuntimeError.ErrorCodes.ATTACHMENT_ERROR,
+                                                  "invalid type of attachment", True,
+                                                  reply=ErrorPhrases.QUOTE_CREATION_ERROR_13.value,
+                                                  keyboard=Keyboard.FAQ_AND_RETURN)
+
+                    author = parse_result.author if parse_result.author else self.db.get_user_alias(vk_id=vk_id)
+                    print(parse_result.text, author)
                     quote_id = self.db.create_quote(vk_id=vk_id, text=parse_result.text, tags=parse_result.tags,
-                                                    author=parse_result.author, attachments=event.message.attachments)
+                                                    author=author, attachments=[attachment])
                     saved_quote = self.get_quote(quote_id=quote_id)
+                    print(saved_quote)
                     reply = 'Высказывание сохранено:\n' + saved_quote[0]
-                    self.send_message(peer_id=vk_id, message=reply, attachments=saved_quote[1],
+                    self.send_message(peer_id=vk_id, message=reply, attachment=saved_quote[1][0],
                                       keyboard=Keyboard.FAQ_AND_RETURN)
 
                 elif user_state in [State.SEARCH_BY_WORD, State.SEARCH_BY_TAG]:
@@ -310,7 +335,7 @@ class BotBase:
                         self.db.set_user_state(vk_id=vk_id, state=State.BOT_MENU)
                     else:
                         raise BotRuntimeError(BotRuntimeError.ErrorCodes.ALIAS_ERROR, "alias already exists", True,
-                                              reply=ErrorPhrases.ALIAS_ALREADY_EXISTS.value)
+                                              reply=ErrorPhrases.ALIAS_ALREADY_EXISTS.value, keyboard=Keyboard.RETURN)
 
                 else:
                     raise BotRuntimeError(BotRuntimeError.ErrorCodes.STATE_ERROR, "command not found", True,
@@ -361,6 +386,7 @@ class BotBase:
                 author = ''
                 private = False
                 tags = []
+                print(splited)
                 for param in splited[1:]:
                     if not param:
                         raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "empty param passed", True,
@@ -418,6 +444,8 @@ class BotBase:
                     else:
                         private = True
 
+                print([text, author])
+
                 return self.ParseResult(False, text=text, tags=tags, author=author, private=private)
 
         elif state in [State.SEARCH_BY_WORD, State.SEARCH_BY_TAG]:
@@ -452,15 +480,13 @@ class BotBase:
             raise BotRuntimeError(BotRuntimeError.ErrorCodes.PARSE_ERROR, "unknown parse behavior", True,
                                   reply=ErrorPhrases.PARSE_UNKNOWN_BEHAVIOR.value)
 
-    def send_message(self, peer_id: int, *, message='', attachments=None, keyboard=Keyboard.EMPTY):
-        if attachments is None:
-            attachments = []
-        check_args({'peer_id': (peer_id, int), 'message': (message, str), 'attachments': (attachments, list),
+    def send_message(self, peer_id: int, *, message='', attachment='', keyboard=Keyboard.EMPTY):
+        check_args({'peer_id': (peer_id, int), 'message': (message, str), 'attachment': (attachment, str),
                     'keyboard': (keyboard, Keyboard)})
         self.bot_api.messages.send(
             random_id=random.getrandbits(32),
             peer_id=peer_id,
             message=message,
-            attachments=attachments,
+            attachment=attachment,
             keyboard=None if keyboard == Keyboard.EMPTY else create_keyboard(keyboard)
         )

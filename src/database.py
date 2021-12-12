@@ -86,7 +86,7 @@ class Database:
                 "author_id" INTEGER NOT NULL, 
                 "text" VARCHAR(500) NOT NULL,
                 "tags" INTEGER[],
-                "attachment" VARCHAR(32),
+                "attachment" VARCHAR(64),
                 "private" BOOL NOT NULL,
                 PRIMARY KEY ("quote_id"),
                 FOREIGN KEY ("user_id")  REFERENCES "users" ("user_id"),
@@ -149,6 +149,13 @@ class Database:
         print(state)
         return State(state)
 
+    def get_user_alias(self, vk_id: int) -> str:
+        command = f"""SELECT "alias" FROM "users" WHERE "vk_id" = {vk_id};"""
+        self.cursor.execute(command)
+        alias = self.cursor.fetchone()[0]
+        print(alias)
+        return alias
+
     def set_user_alias(self, vk_id: int, alias: str):
         command = """
         UPDATE "users"
@@ -166,23 +173,32 @@ class Database:
 
         tags_str = ', '.join(["('{}')".format(x) for x in tags])
 
+        create_tags_arr = """
+        WITH ins AS (
+        INSERT INTO tags ("text") VALUES {tags}
+        ON CONFLICT("text") DO UPDATE SET "text"=EXCLUDED."text" RETURNING tag_id)
+        SELECT array_agg(tag_id) INTO tags_arr FROM ins;
+        """ if tags else ''
+
+        create_attachment = f"attachment = '{attachments[0]}';" if attachments else ''
+
         command = """
         DO $$
             DECLARE q_id quotes.quote_id%TYPE;
+            DECLARE attachment quotes.attachment%TYPE;
             DECLARE a_id authors.author_id%TYPE;
             DECLARE tags_arr INTEGER[];
         BEGIN
-            WITH ins AS (
-                INSERT INTO tags ("text") VALUES {tags}
-                ON CONFLICT("text") DO UPDATE SET "text"=EXCLUDED."text" RETURNING tag_id)
-            SELECT array_agg(tag_id) INTO tags_arr FROM ins;
+            {create_tags_arr}
+            
+            {create_attachment}
         
             INSERT INTO authors ("title") 
             VALUES ('{author}') ON CONFLICT(title) DO UPDATE SET title=EXCLUDED.title
             RETURNING author_id INTO a_id;
         
             INSERT INTO quotes (user_id, author_id, "text", tags, attachment, "private")
-            VALUES ((SELECT user_id FROM users WHERE vk_id = {vk_id}), a_id, '{text}', tags_arr, '{attachment}', '{private}')
+            VALUES ((SELECT user_id FROM users WHERE vk_id = {vk_id}), a_id, '{text}', tags_arr, attachment, '{private}')
             RETURNING quote_id INTO q_id;
         
             UPDATE authors
@@ -198,14 +214,14 @@ class Database:
             UPDATE tags 
             SET quotes = array_append(quotes, q_id) 
             WHERE tags.tag_id = ANY (tags_arr::int[]);
-            SELECT "quote_id" FROM "quotes" WHERE "quote_id" = q_id;
-        END $$
+        END $$;
         SELECT MAX("quote_id") FROM "quotes"
         INNER JOIN "users"
         ON "quotes"."user_id" = "users"."user_id"
         WHERE "text" = '{text}' and "vk_id" = {vk_id};
         """.format(vk_id=vk_id, text=text, tags=tags_str, author=author, private=(1 if private else 0),
-                   attachment=(attachments[0] if len(attachments) > 0 else 'NULL'))
+                   create_tags_arr=create_tags_arr, create_attachment=create_attachment)
+        print(command)
         self.cursor.execute(command)
         quote_id = self.cursor.fetchone()[0]
         self.connection.commit()
@@ -233,6 +249,7 @@ class Database:
             'attachments': [quote[3]] if quote[3] is not None else [],
             'private': quote[4]
         }
+        print(request_result)
         return request_result
 
     def get_user_quotes(self, vk_id: int) -> list:
@@ -242,10 +259,9 @@ class Database:
         ON "quotes"."user_id" = "users"."user_id"
         WHERE "vk_id" = {vk_id};
         """
-        quote_ids = self.cursor.fetchall()
-        print(quote_ids)
-        request_result = [12345, 12346]
-        return request_result
+        self.cursor.execute(command)
+        quote_ids = [x[0] for x in self.cursor.fetchall()]
+        return quote_ids
 
     def get_quotes_on_random(self, max_amount: int) -> list:
         command = f"""
