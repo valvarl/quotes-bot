@@ -87,9 +87,8 @@ class BotBase:
                             self.send_message(peer_id=event.message.from_id, message=reply, keyboard=e.keyboard)
                         else:
                             print(e.code.value, e.what)
+                            self.db.close_connection()
                             raise e
-                    finally:
-                        self.db.close_connection()
 
             except requests.exceptions.ReadTimeout:
                 continue
@@ -104,9 +103,11 @@ class BotBase:
 
     def print_quote_list(self, vk_id: int, quotes: list, keyboard: Keyboard, print_quote_id=False):
         message_rely = ''
+        print(quotes)
         for quote in quotes:
             new_quote = self.get_quote(quote, print_quote_id)
-            if not new_quote[1]:
+            print(new_quote)
+            if not new_quote[1][0]:
                 if len(message_rely) + len(new_quote[0]) + 2 < VK_MESSAGE_LIMIT:
                     message_rely += "\n\n" + new_quote[0]
                 else:
@@ -130,10 +131,11 @@ class BotBase:
             except BotRuntimeError as e:
                 if e.need_reply:
                     if user_state in [State.QUOTE_CREATION_BM, State.QUOTE_CREATION_MQ,
-                                      State.SEARCH_BY_WORD, State.SEARCH_BY_WORD]:
+                                      State.SEARCH_BY_WORD, State.SEARCH_BY_TAG]:
                         e.keyboard = Keyboard.FAQ_AND_RETURN
-                    elif user_state == State.ALIAS_CHANGING:
-                        e.keyboard = Keyboard.RETURN
+                    else:
+                        self.db.set_user_state(vk_id=vk_id, state=State.BOT_MENU)
+                        e.keyboard = Keyboard.BOT_MENU
                 raise e
             if parse_result.bot_command and user_exists or parse_result.command == Command.BOT_START:
                 if parse_result.command == Command.BOT_START:
@@ -161,7 +163,8 @@ class BotBase:
                     print("MY_QUOTES")
                     quotes = self.db.get_user_quotes(vk_id=vk_id)
                     if quotes:
-                        self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.MY_QUOTES)
+                        self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.MY_QUOTES,
+                                              print_quote_id=True)
                     else:
                         self.send_message(peer_id=vk_id, message=KeyboardHints.MY_QUOTES_EMPTY.value,
                                           keyboard=Keyboard.MY_QUOTES)
@@ -224,8 +227,10 @@ class BotBase:
                         self.send_message(peer_id=vk_id, message=KeyboardHints.MY_QUOTES_RETURN.value,
                                           keyboard=Keyboard.MY_QUOTES)
                     else:
+                        self.db.set_user_state(vk_id=vk_id, state=State.BOT_MENU)
                         raise BotRuntimeError(BotRuntimeError.ErrorCodes.COMMAND_ERROR,
-                                              "unknown command \"{}\"".format(parse_result.command), False)
+                                              "unknown command \"{}\"".format(parse_result.command), True,
+                                              reply=ErrorPhrases.STATE_ERROR, keyboard=Keyboard.BOT_MENU)
 
                 elif parse_result.command == Command.FAQ:
                     if user_state in [State.QUOTE_CREATION_BM, State.QUOTE_CREATION_MQ]:
@@ -244,8 +249,10 @@ class BotBase:
                         self.send_message(peer_id=vk_id, message=GroupPhrases.SEARCH_BY_TAG_FAQ.value,
                                           keyboard=Keyboard.RETURN)
                     else:
+                        self.db.set_user_state(vk_id=vk_id, state=State.BOT_MENU)
                         raise BotRuntimeError(BotRuntimeError.ErrorCodes.COMMAND_ERROR,
-                                              "unknown command \"{}\"".format(parse_result.command), False)
+                                              "unknown command \"{}\"".format(parse_result.command), True,
+                                              reply=ErrorPhrases.STATE_ERROR, keyboard=Keyboard.BOT_MENU)
 
                 else:
                     raise BotRuntimeError(BotRuntimeError.ErrorCodes.COMMAND_ERROR,
@@ -322,11 +329,8 @@ class BotBase:
                                                            search_param=parse_result.search_param,
                                                            max_amount=SEARCH_QUOTES_AMOUNT)
                     if quotes:
-                        self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.MY_QUOTES,
+                        self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.RETURN,
                                               print_quote_id=True)
-
-                        #TODO put keyboard into print_quote_list
-                        self.send_message(peer_id=vk_id, keyboard=Keyboard.FAQ_AND_RETURN)
                     else:
                         self.send_message(peer_id=vk_id, message=GroupPhrases.SEARCH_EMPTY.value,
                                           keyboard=Keyboard.FAQ_AND_RETURN)
