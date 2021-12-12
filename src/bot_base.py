@@ -161,7 +161,7 @@ class BotBase:
 
                 elif parse_result.command == Command.MY_QUOTES:
                     print("MY_QUOTES")
-                    quotes = self.db.get_user_quotes(vk_id=vk_id)
+                    quotes = self.db.get_my_quotes(vk_id=vk_id)
                     if quotes:
                         self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.MY_QUOTES,
                                               print_quote_id=True)

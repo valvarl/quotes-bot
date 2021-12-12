@@ -149,7 +149,7 @@ class Database:
         if attachments is None:
             attachments = []
 
-        tags_str = ', '.join(["('{}')".format(x) for x in tags])
+        tags_str = ', '.join(["('{}')".format(x) for x in list(set(tags))])
 
         create_tags_arr = f"""
         WITH ins AS (
@@ -219,9 +219,18 @@ class Database:
         self.cursor.execute(command)
         self.connection.commit()
 
-    # TODO: make remove_user_quote
     def remove_user_quote(self, vk_id: int, quote_id: int):
-        pass
+        command = f"""
+        UPDATE users
+        SET quotes = array_remove( quotes, {quote_id} )  
+        WHERE vk_id= {vk_id} and (quotes @> '{{{quote_id}}}'::INT[]);
+        update quotes
+        set private = '1'
+        where private = '0' and quote_id={quote_id} and not exists((select quotes from users
+        where (quotes @> '{{{quote_id}}}'::INT[]) group by quotes having count(quotes)=1));
+        """
+        self.cursor.execute(command)
+        self.connection.commit()
 
     def get_quote(self, quote_id: int) -> dict or None:
         command = f"""
@@ -260,6 +269,16 @@ class Database:
         quote_ids = [x[0] for x in self.cursor.fetchall()]
         return quote_ids
 
+    def get_my_quotes(self, vk_id: int) -> list:
+        command = f"""
+        SELECT "quotes" FROM "users" 
+        WHERE "vk_id" = {vk_id};
+        """
+        self.cursor.execute(command)
+        quote_ids = self.cursor.fetchone()[0]
+        print(quote_ids)
+        return quote_ids
+
     def get_quotes_on_random(self, max_amount: int) -> list:
         command = f"""
         SELECT "quote_id" FROM "quotes"
@@ -276,9 +295,9 @@ class Database:
         print(word_states)
         commands = (f"""
         ---ищет среди всех и своих и чужих публичных
-        SELECT "quote_id" FROM "quotes" 
-        WHERE "quote_id" <> All((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::INT[]) 
-        AND "private" = '0' AND "text" ILIKE ANY(ARRAY[{word_states}])
+        SELECT "quote_id" FROM "quotes" WHERE ("quote_id" = ANY((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::int[]) OR(
+        "quote_id" <> ALL((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::int[]) AND "private" = '0'
+        )) AND "text" ILIKE ANY(ARRAY[{word_states}])
         ORDER BY RANDOM()
         LIMIT {max_amount};
         """, f"""
@@ -289,8 +308,9 @@ class Database:
         LIMIT {max_amount};					
         """, f"""
         ---поиск по высказываниям других пользователей
-        SELECT "quote_id" FROM quotes
-        WHERE "private"='0' AND "text" ILIKE ANY(ARRAY[{word_states}])   
+        SELECT "quote_id" FROM "quotes" WHERE "quote_id" <> ALL((
+        SELECT "quotes" FROM "users" WHERE "vk_id" ={vk_id})::int[]) 
+        AND "private" = '0' AND "text" ILIKE ANY(ARRAY[{word_states}])
         ORDER BY RANDOM()
         LIMIT {max_amount};
         """)
@@ -300,5 +320,28 @@ class Database:
         return quote_ids
 
     def get_quotes_by_tag(self, vk_id: int, tags: list, search_param: SearchParams, max_amount: int) -> list:
-        request_result = [12345, 12346]
-        return request_result
+        tags_arr = ', '.join(["'{}'".format(x) for x in tags])
+        commands = (f"""
+        ---ищет среди всех и своих и чужих публичных
+        SELECT "quote_id" FROM "quotes" WHERE ("quote_id" = ANY((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::int[]) OR(
+        "quote_id" <> ALL((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::int[]) AND "private" = '0'
+        )) AND "tags" && (SELECT ARRAY_AGG("tag_id") FROM "tags" WHERE "text" ILIKE ANY(ARRAY[{tags_arr}]))
+        ORDER BY RANDOM()
+        LIMIT {max_amount};
+        """, f"""
+        --- ищет по всем своим, которые написаны vk_id и добавлены 
+        SELECT "quote_id" FROM "quotes" WHERE "quote_id" = ANY((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::int[])
+        AND "tags" && (SELECT ARRAY_AGG("tag_id") FROM "tags" WHERE "text" ILIKE ANY(ARRAY[{tags_arr}]))
+        ORDER BY RANDOM()
+        LIMIT {max_amount};					
+        """, f"""
+        ---поиск по высказываниям других пользователей
+        SELECT "quote_id" FROM "quotes" WHERE "quote_id" <> ALL((SELECT "quotes" FROM "users" WHERE "vk_id" = {vk_id})::int[]) AND "private" = '0'
+        AND "tags" && (SELECT ARRAY_AGG("tag_id") FROM "tags" WHERE "text" ILIKE ANY(ARRAY[{tags_arr}]))   
+        ORDER BY RANDOM()
+        LIMIT {max_amount};
+        """)
+        print(commands)
+        self.cursor.execute(commands[search_param.value])
+        quote_ids = [x[0] for x in self.cursor.fetchall()]
+        return quote_ids

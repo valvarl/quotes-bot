@@ -19,9 +19,9 @@ class State(Enum):
 
 
 class SearchParams(Enum):
-    PUBLIC = 0
+    ALL = 0
     PRIVATE = 1
-    ALL = 2
+    PUBLIC = 2
 
 
 class Keyboard(Enum):
