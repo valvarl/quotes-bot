@@ -88,6 +88,8 @@ class BotBase:
                         else:
                             print(e.code.value, e.what)
                             raise e
+                    finally:
+                        self.db.close_connection()
 
             except requests.exceptions.ReadTimeout:
                 continue
@@ -152,7 +154,7 @@ class BotBase:
                     elif user_state == State.MY_QUOTES:
                         self.db.set_user_state(vk_id=vk_id, state=State.QUOTE_CREATION_MQ)
                     else:
-                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.UNKNOWN_COMMAND,
+                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.COMMAND_ERROR,
                                               "unknown command \"{}\"".format(parse_result.command), False)
 
                 elif parse_result.command == Command.MY_QUOTES:
@@ -222,7 +224,7 @@ class BotBase:
                         self.send_message(peer_id=vk_id, message=KeyboardHints.MY_QUOTES_RETURN.value,
                                           keyboard=Keyboard.MY_QUOTES)
                     else:
-                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.UNKNOWN_COMMAND,
+                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.COMMAND_ERROR,
                                               "unknown command \"{}\"".format(parse_result.command), False)
 
                 elif parse_result.command == Command.FAQ:
@@ -242,11 +244,11 @@ class BotBase:
                         self.send_message(peer_id=vk_id, message=GroupPhrases.SEARCH_BY_TAG_FAQ.value,
                                           keyboard=Keyboard.RETURN)
                     else:
-                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.UNKNOWN_COMMAND,
+                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.COMMAND_ERROR,
                                               "unknown command \"{}\"".format(parse_result.command), False)
 
                 else:
-                    raise BotRuntimeError(BotRuntimeError.ErrorCodes.UNKNOWN_COMMAND,
+                    raise BotRuntimeError(BotRuntimeError.ErrorCodes.COMMAND_ERROR,
                                           "unknown command \"{}\"".format(parse_result.command), False)
 
             else:
@@ -322,6 +324,8 @@ class BotBase:
                     if quotes:
                         self.print_quote_list(vk_id=vk_id, quotes=quotes, keyboard=Keyboard.MY_QUOTES,
                                               print_quote_id=True)
+
+                        #TODO put keyboard into print_quote_list
                         self.send_message(peer_id=vk_id, keyboard=Keyboard.FAQ_AND_RETURN)
                     else:
                         self.send_message(peer_id=vk_id, message=GroupPhrases.SEARCH_EMPTY.value,
@@ -337,6 +341,21 @@ class BotBase:
                     else:
                         raise BotRuntimeError(BotRuntimeError.ErrorCodes.ALIAS_ERROR, "alias already exists", True,
                                               reply=ErrorPhrases.ALIAS_ALREADY_EXISTS.value, keyboard=Keyboard.RETURN)
+
+                elif user_state in [State.QUOTE_ADDING, State.QUOTE_DELETING]:
+                    quote = self.db.get_quote(quote_id=int(parse_result.text))
+                    if quote is None:
+                        raise BotRuntimeError(BotRuntimeError.ErrorCodes.ID_ERROR, "id not exists", True,
+                                              reply=ErrorPhrases.QUOTE_ID_NOT_EXISTS.value,
+                                              keyboard=Keyboard.FAQ_AND_RETURN)
+                    if user_state == State.QUOTE_ADDING:
+                        self.db.add_quote_to_user(vk_id=vk_id, quote_id=int(parse_result.text))
+                        self.send_message(peer_id=vk_id, message=KeyboardHints.QUOTE_ADDED.value,
+                                          keyboard=Keyboard.RETURN)
+                    else:
+                        self.db.remove_user_quote(vk_id=vk_id, quote_id=int(parse_result.text))
+                        self.send_message(peer_id=vk_id, message=KeyboardHints.QUOTE_DELETED.value,
+                                          keyboard=Keyboard.RETURN)
 
                 else:
                     raise BotRuntimeError(BotRuntimeError.ErrorCodes.STATE_ERROR, "command not found", True,
@@ -386,7 +405,7 @@ class BotBase:
                                           True, reply=ErrorPhrases.QUOTE_CREATION_ERROR_11.value)
                 author = ''
                 private = False
-                tags = []
+                tags = None
                 print(splited)
                 for param in splited[1:]:
                     if not param:
@@ -445,7 +464,7 @@ class BotBase:
                     else:
                         private = True
 
-                print([text, author])
+                print([text, author, tags, private])
 
                 return self.ParseResult(False, text=text, tags=tags, author=author, private=private)
 
@@ -474,7 +493,7 @@ class BotBase:
             else:
                 return self.ParseResult(False, tags=word.split(), search_param=search_param)
 
-        elif state in [State.ALIAS_CHANGING, State.ALIAS_INPUT]:
+        elif state in [State.ALIAS_CHANGING, State.ALIAS_INPUT, State.QUOTE_ADDING, State.QUOTE_DELETING]:
             alias = raw_message.strip()
             return self.ParseResult(False, text=alias)
         else:

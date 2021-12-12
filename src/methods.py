@@ -42,6 +42,7 @@ class BotRuntimeError(Exception):
         STATE_ERROR = 4
         ALIAS_ERROR = 5
         ATTACHMENT_ERROR = 6
+        ID_ERROR = 7
 
     def __init__(self, code: ErrorCodes, what: str, need_reply: bool, *, reply='', keyboard=Keyboard.EMPTY):
         self.code = code

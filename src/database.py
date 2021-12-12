@@ -173,9 +173,9 @@ class Database:
 
         tags_str = ', '.join(["('{}')".format(x) for x in tags])
 
-        create_tags_arr = """
+        create_tags_arr = f"""
         WITH ins AS (
-        INSERT INTO tags ("text") VALUES {tags}
+        INSERT INTO tags ("text") VALUES {tags_str}
         ON CONFLICT("text") DO UPDATE SET "text"=EXCLUDED."text" RETURNING tag_id)
         SELECT array_agg(tag_id) INTO tags_arr FROM ins;
         """ if tags else ''
@@ -239,7 +239,10 @@ class Database:
         self.cursor.execute(command)
         self.connection.commit()
 
-    def get_quote(self, quote_id: int) -> dict:
+    def remove_user_quote(self, vk_id: int, quote_id: int):
+        pass
+
+    def get_quote(self, quote_id: int) -> dict or None:
         command = f"""
         SELECT "vk_id", "title", "text", "attachment", "private" FROM "quotes"
         INNER JOIN "authors"
@@ -252,6 +255,8 @@ class Database:
         quote = self.cursor.fetchone()
 
         print(quote)
+        if quote is None:
+            return quote
 
         request_result = {
             'vk_id': quote[0],  # vk_id of creator
